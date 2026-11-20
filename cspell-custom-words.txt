@@ -70,6 +70,8 @@ ethersproject
 ETHRPC
 evmos
 evmtypes
+filetest
+filetests
 Finalizer
 fogo
 Fogo
@@ -79,6 +81,9 @@ forgeable
 FQTs
 frontends
 funder
+gnomod
+GNOROOT
+GNOT
 gofmt
 gogoproto
 goimports
@@ -137,6 +142,7 @@ localnet
 localterra
 lockfiles
 logonly
+maketx
 marshal
 megaETH
 MegaETH
@@ -254,6 +260,7 @@ tsproto
 TWAP
 txverifier
 uatom
+ugnot
 uluna
 unbond
 unbuffered

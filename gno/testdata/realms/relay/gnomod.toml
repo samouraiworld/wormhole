@@ -1,0 +1,2 @@
+module = "gno.land/r/wormhole_test/relay"
+gno = "0.9"

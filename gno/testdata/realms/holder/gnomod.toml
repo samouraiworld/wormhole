@@ -1,0 +1,2 @@
+module = "gno.land/r/wormhole_test/holder"
+gno = "0.9"

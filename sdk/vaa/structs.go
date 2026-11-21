@@ -397,6 +397,10 @@ const (
 	// ChainIDElysium is the ChainID of Elysium
 	ChainIDElysium ChainID = 74
 
+	// ChainIDGno is the ChainID of gno.land. The value is a placeholder until
+	// Wormhole assigns gno.land its ChainID.
+	ChainIDGno ChainID = 900
+
 	// ChainIDWormchain is the ChainID of Wormchain and is in its own range.
 	ChainIDWormchain ChainID = 3104
 

@@ -1,0 +1,47 @@
+// PKGPATH: gno.land/r/wormhole_test/gnotwindow
+package gnotwindow
+
+// Under GNOT's 24-hour outbound cap of 150, a direct user's TransferGNOT of 100
+// goes out, and one of 51 in the same hour fails with outbound-cap: within the
+// per-transfer cap of 100, but over what the window has left.
+
+import (
+	"chain"
+	"encoding/hex"
+	"testing"
+	"time"
+
+	"gno.land/r/wormhole/tokenbridge"
+	v1 "gno.land/r/wormhole/tokenbridge/logic/v1"
+)
+
+func wire(s string) []byte {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// deposit stands for a MsgCall's -send, which the bank credits to the logic.
+func deposit(amount int64) {
+	sent := chain.NewCoins(chain.NewCoin("ugnot", amount))
+	testing.SetOriginSend(sent)
+	testing.IssueCoins(chain.PackageAddress("gno.land/r/wormhole/tokenbridge/logic/v1"), sent)
+}
+
+func main(cur realm) {
+	ctx := testing.GetContext()
+	ctx.Time = time.Unix(1_800_000_000, 0)
+	testing.SetContext(ctx)
+	user := chain.PackageAddress("gno.land/r/wormhole_test/user")
+	tokenbridge.RegisterChain(cross(cur), wire("01000000030d00702242a4cbc01e3c80ec68af614c764bdbaa92217be40fc30ac79258ac38599c416c05982b2926dee53f12ec7f88e89cc00e73d669e49fe4a4b0e1b5104ef1700001cacb1e94ac2c109f57d82e1401c22b72cf82fd7492513684c45f90935255ee992325f364d52283b6698d233bcba28e9b255a88a0ded1bd554060a56ead01cb8f000297f4d3f152ddc1c1a86da86b515d1207f89844de2335b42693660322308f7ec91362f13ec12f374972d6ec6f24c3b79c72c1ed7eb0bff4481823cd39d3d1a383010395236c4fe5481a78a0b6881e3003aa175503e0dc7e61fe28e3708da726c4559b1778cc60e4e5598eca27c2907f8e6d3cf93a317edec601c4d6a8e4caae149ed00104a4938eee1603b563158eaf7efa3d4567ade9a61aee36f7aae50de8d6ea76b2f0179d8494b00b3ad2747166ac1bf4f11af95b1956bcb076ad057aea0fc98f13a500057ec86196b6b8bf154c27bde55ef02ccc6957571bafcf57515c112856e71d84255002548480db3f46fb9f6e12aca44287618ff31b3947ba413b64d96fe602daad0006efb7ff1394a7672908e5fc1e36ba19534b5db80cffe6803593a12fc51b84440e4e52a0622d381269abb63c411174f4f4fa9d4f5aded3750f0a87a51e9deeeeac01070730771bcf1d356247cfa25d58066e36a03cb387d091277e2ad1eb20ad1645d8091ed6b41166c6fcb73db1373f630fe6e8b6bd479be01e35952a9741e94b72b00108d4e806b0bfbaf8130366386f3be3c7d4a6ccd53fcc88342219a6597001a47bba3360ac7ecba68f14ef19e06adb8a98b404badbfcb01c17ce83c4195011fb89880109f4159a6c9195e0a5c06ca12c5e6a2706e5e765a87f1d5691bc858def80f3c0fb675311efa19f8a3dce3f9889de16731ef4f0899c4e75aa72d7a8d2a7be303e94010a8f96de37f9269664cde3d2271471703415f8147bacc8f82fdac786817e47a442356e2368d953024049243db9032f22b0d8c6659dd30942faafb157b0f3c97452010b66ede326db9247cdc1cb72b99193fe2f9791c80e1d0c34ac2c4ad2a59b8c50404784a48a756f8111da8a760bfed83d7af681c6f569d44196243b014b02daa4ff000c0eaea9e5bf052c23b52f19a77711da2d8f5c352bae8b556290d9f40a862a465f44c5438527b4b6d99a97b201700277984e8989ec7dba41e7ded5ceb4b693cd36006b49d200000000070001000000000000000000000000000000000000000000000000000000000000000400000000000000c901000000000000000000000000000000000000000000546f6b656e42726964676501ffff0002a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"))
+	testing.SetRealm(testing.NewUserRealm(user))
+	deposit(100)
+	v1.TransferGNOT(cross(cur), 100, 2, [32]byte{31: 0xee}, 0, 0)
+	deposit(51)
+	v1.TransferGNOT(cross(cur), 51, 2, [32]byte{31: 0xee}, 0, 0)
+}
+
+// Error:
+// tokenbridge: outbound-cap

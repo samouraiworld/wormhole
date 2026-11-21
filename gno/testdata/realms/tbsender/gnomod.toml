@@ -1,0 +1,2 @@
+module = "gno.land/r/wormhole_test/tbsender"
+gno = "0.9"

@@ -1,0 +1,126 @@
+// PKGPATH: gno.land/r/wormhole_test/messagefee
+package messagefee
+
+// Core's message fee at 5, set by a governance VAA. A direct user who attaches
+// 1,005 ugnot to a GNOT transfer of 1,000 gives Core 5 and the vault 1,000, and
+// keeps nothing in the logic, and so for payload 3. A direct user's wrapped
+// transfers, of both payloads, and AttestGNOT each attach exactly 5, which Core
+// receives. A realm sender pays Core itself: tbsender's wrapped transfer before
+// it paid fails with Core's fee-unpaid and burns and publishes nothing, and 5
+// ugnot donated to the logic pay nothing for it. Once tbsender has paid 5, the
+// same transfer goes out, whatever the origin call attached. AttestGNOT from
+// tbsender works the same way.
+
+import (
+	"chain"
+	"chain/banker"
+	"encoding/hex"
+	"testing"
+	"time"
+
+	tb "gno.land/p/wormhole/tokenbridge/v0"
+	"gno.land/r/wormhole/core"
+	"gno.land/r/wormhole/tokenbridge"
+	v1 "gno.land/r/wormhole/tokenbridge/logic/v1"
+	"gno.land/r/wormhole_test/tbsender"
+)
+
+const logicPath = "gno.land/r/wormhole/tokenbridge/logic/v1"
+
+func wire(s string) []byte {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+func ugnot(a address) int64 {
+	return banker.NewReadonlyBanker().GetCoin(a, "ugnot")
+}
+
+// deposit stands for a MsgCall's -send: the bank credits the coins to the logic.
+func deposit(amount int64) {
+	coins := chain.NewCoins(chain.NewCoin("ugnot", amount))
+	testing.SetOriginSend(coins)
+	testing.IssueCoins(chain.PackageAddress(logicPath), coins)
+}
+
+func vaultEmitter() [32]byte {
+	var e [32]byte
+	copy(e[12:], wire("ec284bb840cb6b26cedd71e45561c6c09d2c42d3"))
+	return e
+}
+
+// balances prints Core's, the vault's and the logic's ugnot, and the vault's
+// next sequence.
+func balances() {
+	println(ugnot(chain.PackageAddress("gno.land/r/wormhole/core")),
+		ugnot(chain.PackageAddress("gno.land/r/wormhole/tokenbridge")), ugnot(chain.PackageAddress(logicPath)),
+		core.NextSequence(vaultEmitter()))
+}
+
+func main(cur realm) {
+	ctx := testing.GetContext()
+	ctx.Time = time.Unix(1_800_000_000, 0)
+	testing.SetContext(ctx)
+	user := chain.PackageAddress("gno.land/r/wormhole_test/user")
+	sender := chain.PackageAddress("gno.land/r/wormhole_test/tbsender")
+	recipient := [32]byte{31: 0xee}
+	core.SubmitGovernance(cross(cur), wire("01000000030d0059c91a302982fc20ad66c3173e4fa31944d57a7b8ced4a1ea5c40f5e026e92d761ea7f10c508aeef8be4c748b18b81ace6b570148127fde0232712975d7b16bc01011ababa74779add3e64822bbe824167392f6653b1f7ee6016dc5e90ec639306b5271114d27982b233888bec5316a86f7f52612582e74646e23a1ccd19b139619d01026fad5272343306e0f154dd5573c4aadd50e725d2f6bdb8934acbe3567ae3b9071eb8a6bc2c5891aa0e886e7a873e8c5b2ce415dd9248f8f95e70d51f5538b928010388eabb90a24036e17ed83b243a5ce21bca91a3e2e5641d02eb812cadf7369d7476e90c7303db67bfedc63ef8da7fe30b1d4f59a2f86c9c2fcb882f28ab5f919401041cc89d677490d4e23cd48fe3858bcb30396e20fe36dcca69370b7ae678e5f3cc71fdb9769c0513086c5f585cdf6aff08a994be51ab221975c9713ee6329d6a8b010555c413d1f30fa9aaa5af26c8f7cd6d4cc9146235c4dee3034c3aadcb064b0d0c1534c448cf75d5223ac4252427489f725df806d0e3ee63254c7f17bd9840f0cf0106fd31cdf65eace36e88ab730e397b0404ee30309b71455b53f5a3c99aa202779c029e94dee9d7a6b88205c79db013e56f812a659c9d0c02470bc4c30c18933e3000070896febb7c27dfa34899000662f4b98229798ffbdba39e0b08e63aad84ab6b1c41c8267ca3f8b3292949675885990a086bf6a02824289138a24f74ebb8b3693a0008fdbfb83418469b23f8704cff41f9fa637c799b43ff8355d3ef34c5d4ac4027e83842a20fef3c02dc9e2a01bf96c2f2d64cd043af7971ea1874d9f4868a7fcb7c00092a96ed9145675c952d6d327e0946d02f25994db9f9b8a8fe239697fdb82708f92db579dee6653dfd08f5d16ccde2b6144705884b4eb0b04042a7c67339450e54010af7457d17d1d51c434ea185b0b49bd9dfd5cae975b4990548933c0895327855e438b538af7d1cbe1bab564b260be3e6cee9d60f31d34f12bd5413f59db7ff40c5000bd638a1585554e77ea5fe9f6fd2a4ad8aa77ba17f978a10e4201834bf3866d53326dc5b064d4094af47039ba95591664f41e66a9792913a3f686e8c0fdd34c946000cd272c16d4cd874a6b98b2168b149559ab8923f549232101e3210cf4288b2159c4a08e89a95ca5bc7d4c31db1b29aae2e408ebfaa30c7b59ea4ecb234c8d22f8e016b49d200000000010001000000000000000000000000000000000000000000000000000000000000000400000000000000012000000000000000000000000000000000000000000000000000000000436f726503ffff0000000000000000000000000000000000000000000000000000000000000005"))
+	tokenbridge.RegisterChain(cross(cur), wire("01000000030d00702242a4cbc01e3c80ec68af614c764bdbaa92217be40fc30ac79258ac38599c416c05982b2926dee53f12ec7f88e89cc00e73d669e49fe4a4b0e1b5104ef1700001cacb1e94ac2c109f57d82e1401c22b72cf82fd7492513684c45f90935255ee992325f364d52283b6698d233bcba28e9b255a88a0ded1bd554060a56ead01cb8f000297f4d3f152ddc1c1a86da86b515d1207f89844de2335b42693660322308f7ec91362f13ec12f374972d6ec6f24c3b79c72c1ed7eb0bff4481823cd39d3d1a383010395236c4fe5481a78a0b6881e3003aa175503e0dc7e61fe28e3708da726c4559b1778cc60e4e5598eca27c2907f8e6d3cf93a317edec601c4d6a8e4caae149ed00104a4938eee1603b563158eaf7efa3d4567ade9a61aee36f7aae50de8d6ea76b2f0179d8494b00b3ad2747166ac1bf4f11af95b1956bcb076ad057aea0fc98f13a500057ec86196b6b8bf154c27bde55ef02ccc6957571bafcf57515c112856e71d84255002548480db3f46fb9f6e12aca44287618ff31b3947ba413b64d96fe602daad0006efb7ff1394a7672908e5fc1e36ba19534b5db80cffe6803593a12fc51b84440e4e52a0622d381269abb63c411174f4f4fa9d4f5aded3750f0a87a51e9deeeeac01070730771bcf1d356247cfa25d58066e36a03cb387d091277e2ad1eb20ad1645d8091ed6b41166c6fcb73db1373f630fe6e8b6bd479be01e35952a9741e94b72b00108d4e806b0bfbaf8130366386f3be3c7d4a6ccd53fcc88342219a6597001a47bba3360ac7ecba68f14ef19e06adb8a98b404badbfcb01c17ce83c4195011fb89880109f4159a6c9195e0a5c06ca12c5e6a2706e5e765a87f1d5691bc858def80f3c0fb675311efa19f8a3dce3f9889de16731ef4f0899c4e75aa72d7a8d2a7be303e94010a8f96de37f9269664cde3d2271471703415f8147bacc8f82fdac786817e47a442356e2368d953024049243db9032f22b0d8c6659dd30942faafb157b0f3c97452010b66ede326db9247cdc1cb72b99193fe2f9791c80e1d0c34ac2c4ad2a59b8c50404784a48a756f8111da8a760bfed83d7af681c6f569d44196243b014b02daa4ff000c0eaea9e5bf052c23b52f19a77711da2d8f5c352bae8b556290d9f40a862a465f44c5438527b4b6d99a97b201700277984e8989ec7dba41e7ded5ceb4b693cd36006b49d200000000070001000000000000000000000000000000000000000000000000000000000000000400000000000000c901000000000000000000000000000000000000000000546f6b656e42726964676501ffff0002a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"))
+	v1.CreateWrapped(cross(cur), wire("01000000030d003b9fd5af401029670f9d7a47d876ece2c38347c080d819d4538fe5ca72fd65c201169d37c99afb5d99a66e6d285ddd60676c643337818dc7e12d1758e34aa2be0101da9ecd659914567e82be5f64d34659d5dade852aaeaee81bdf27270fc1faf99c12b78afeb2001278ba387fcd467c6a2ad62c8b089f4974f19f289a34636ab27900027eddf1604c34c3d0bfaf8b0274a0418c3b890ec07fc17ef94af08814b5d513db798ba583b8faa86c15477d804a3544014afe32af93998fcc865102c2ef79b0430103e9d472de5c810491f92100c87eeeebc1bafb91cbd0a6162c4498e4a6914c937b4e2b3de3436b5f440c0b8696f72eec0161560f8f0138785e1d711973c797c6400004267319deaf215262713c082f127ce686f0f2df275c2068b9f497fa44c8d8a7a07cee40a8fa3c51a405f364c5a7ef1d2e5ebd32dccd2a8800a905528e7ded6ff1010516ecf6e00300ff5a1a41b4888c5a4b2a83be44589ecf8f923964dbb47308c0b314583f70a01dddadaf36abd89a099e5a60ef2717304b18de19fae581fe119b2a0106f5e4af8b355ac44cbbcb2d97c27b55291e7c6b26d3560e670356f1d9a2cacc601ffe1d31f632343b2d3ea0aa5ff31bb6e9d9a3f1bed6893e106e6b3b21de089f00076aca12d74da2541ebba4c593f3d4b88b1a2f8ec3b01b7225f30824efb86a52a06c29369fb421e8004eeaaed4598156b1a657393a7df5c91c60b772fb17e9df8800085559efe593c2a495711ff0837d18bba7333b174beb062c464f26b8b569c4ff106d82b7b927acf151a290747452bb6f93a7a76468beac151ea42eca66b957bb00000907ae424e7524a3dc1e77e9349cba39849df55f02118564af1152991f5a8abc1f4bb22eb06a239ac29dc6ba77458148284f686b25595849f88b108640df26a2f6010afbaa29cf7aee6f554d509d6dbda7491004769233355fbf317f8a3abc5171f42618675ddf5d8aa4aa3191967f38c6662eb95f5aadb39e582013b3eb7fe5bed09e000b5cff4b149f1917d0f3db16c345b68124061ee83f66f2101448f6abc34e29aa115fb93ab6cf40441e6291c68b512bbfc9c915a193b922134991d84773057d5cb6000c493c629fbcdfdecf3eed4075e4470682cf801c9b5126157e07be2a76cef7180d24f4c37f44c4bf34ebb94f374ab6e003a9144a43f1a342ae76396124c940c932016b49d200000000070002a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf00000000000000010102000000000000000000000000a000000000000000000000000000000000000048000206555344430000000000000000000000000000000000000000000000000000000055534420436f696e000000000000000000000000000000000000000000000000"))
+	testing.SetRealm(testing.NewCodeRealm(logicPath))
+	usdc := tb.Origin{Chain: 2, Address: [32]byte{12: 0xa0, 31: 0x48}}
+	tokenbridge.Mint(cross(cur), usdc, user, 1000)
+	tokenbridge.Mint(cross(cur), usdc, sender, 1000)
+	println(core.MessageFee())
+	balances()
+
+	testing.SetRealm(testing.NewUserRealm(user))
+	deposit(1005)
+	v1.TransferGNOT(cross(cur), 1000, 2, recipient, 0, 0)
+	balances()
+	deposit(205)
+	v1.TransferGNOTWithPayload(cross(cur), 200, 2, recipient, []byte("gnot app"), 0)
+	balances()
+	deposit(5)
+	v1.TransferWrapped(cross(cur), "USDC", 100, 2, recipient, 0, 0)
+	balances()
+	deposit(5)
+	v1.TransferWrappedWithPayload(cross(cur), "USDC", 100, 2, recipient, []byte("usdc app"), 0)
+	balances()
+	deposit(5)
+	v1.AttestGNOT(cross(cur), 0)
+	balances()
+
+	testing.IssueCoins(chain.PackageAddress(logicPath), chain.NewCoins(chain.NewCoin("ugnot", 5)))
+	testing.SetRealm(testing.NewCodeRealm("gno.land/r/wormhole_test/realmcaller"))
+	testing.SetOriginSend(chain.NewCoins(chain.NewCoin("ugnot", 7), chain.NewCoin("foo", 1)))
+	println(revive(func() { tbsender.SendWrapped(cross(cur), "USDC", 100, 2, recipient, 0) }))
+	println(revive(func() { tbsender.Attest(cross(cur)) }))
+	println(tokenbridge.BalanceOf("USDC", sender))
+	balances()
+	testing.IssueCoins(sender, chain.NewCoins(chain.NewCoin("ugnot", 10)))
+	tbsender.PayFee(cross(cur), 5)
+	tbsender.SendWrapped(cross(cur), "USDC", 100, 2, recipient, 0)
+	tbsender.PayFee(cross(cur), 5)
+	tbsender.Attest(cross(cur))
+	println(tokenbridge.BalanceOf("USDC", sender), ugnot(sender))
+	balances()
+}
+
+// Output:
+// 5
+// 0 0 0 0
+// 5 1000 0 1
+// 10 1200 0 2
+// 15 1200 0 3
+// 20 1200 0 4
+// 25 1200 0 5
+// core: fee-unpaid
+// core: fee-unpaid
+// 1000
+// 25 1200 5 5
+// 900 0
+// 35 1200 5 7
